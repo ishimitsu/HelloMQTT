@@ -12,6 +12,11 @@
  *   受信時   : レスポンス用トピックに "Hello!" を送信し、画面に "Hello!" を表示。
  *              5秒間表示を維持したのち画面をクリアし、待受表示に戻す。
  *
+ * 設定:
+ *   WiFiのSSID・パスワード、ブローカーのIPアドレスは secrets.h に定義する。
+ *   secrets.h.example をコピーして secrets.h を作成すること。
+ *   secrets.h は .gitignore 済みのため、実際の値がコミットされることはない。
+ *
  * 注意 (PubSubClientの制約):
  *   PubSubClient は publish が QoS 0 固定 (subscribe は QoS 0/1 が可能)。
  *   このため request の購読は QoS 1、response の送信は QoS 0 となる。
@@ -23,15 +28,19 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 
-// ---- 設定: 実際の値に書き換えてください ------------------------------------
+// 認証情報は secrets.h に分離している (Gitの管理対象外)。
+// 未作成の場合は secrets.h.example をコピーして作成すること:
+//     cp secrets.h.example secrets.h
+#include "secrets.h"
 
-const char* WIFI_SSID       = "your-ssid";
-const char* WIFI_PASSWORD   = "your-password";
+// ---- 設定 -------------------------------------------------------------------
+// SSID・パスワード・ブローカーのIPアドレスは secrets.h で定義する。
+// 変更する場合はこのファイルではなく secrets.h を編集すること。
 
-// ブローカー(デバイスB / Raspberry Pi)のIPアドレスを指定する。
-// ホスト名 "raspberrypi.local" (mDNS) はESP32側の環境に依存して解決できない
-// 場合があるため、IPアドレスでの指定を推奨する。
-const char* MQTT_BROKER_HOST = "192.168.1.100";
+const char* WIFI_SSID        = SECRET_WIFI_SSID;
+const char* WIFI_PASSWORD    = SECRET_WIFI_PASSWORD;
+const char* MQTT_BROKER_HOST = SECRET_MQTT_BROKER_HOST;
+
 const uint16_t MQTT_BROKER_PORT = 1883;
 
 // ---------------------------------------------------------------------------

@@ -39,7 +39,9 @@ mqtt-lab/
 │   ├── sender.py
 │   └── requirements.txt
 ├── device_c_m5stack/         # デバイスC（M5Stack、Arduino IDE用）
-│   └── device_c_m5stack.ino
+│   ├── device_c_m5stack.ino
+│   ├── secrets.h.example     # 認証情報テンプレート（コミット対象）
+│   └── secrets.h             # ← 各自で作成。.gitignore 済みでコミットされない
 └── README.md
 ```
 
@@ -108,6 +110,15 @@ Arduino IDE のライブラリマネージャから、以下を**事前にイン
 
 ボード設定は **Board: "M5Stack-Core-ESP32"（または "M5Stack Basic"）** を選択してください。
 
+続いて、認証情報ファイルをテンプレートから作成します。**これを作らないとコンパイルが通りません。**
+
+```bash
+cd mqtt-lab/device_c_m5stack
+cp secrets.h.example secrets.h
+```
+
+`secrets.h` はリポジトリルートの `.gitignore` に登録されているため、実際の値を書いてもコミットされません。
+
 ---
 
 ## 実行順序
@@ -134,14 +145,15 @@ hostname -I
 
 ### 2. デバイスC: スケッチを書き込んで接続を確認
 
-[device_c_m5stack/device_c_m5stack.ino](device_c_m5stack/device_c_m5stack.ino) の冒頭を自分の環境に合わせて書き換えます。
+`secrets.h`（`.ino` ではありません）を自分の環境に合わせて書き換えます。
 
 ```cpp
-const char* WIFI_SSID       = "your-ssid";
-const char* WIFI_PASSWORD   = "your-password";
-const char* MQTT_BROKER_HOST = "192.168.1.100";  // デバイスBのIPアドレス
-const uint16_t MQTT_BROKER_PORT = 1883;
+#define SECRET_WIFI_SSID        "your-ssid"
+#define SECRET_WIFI_PASSWORD    "your-password"
+#define SECRET_MQTT_BROKER_HOST "192.168.1.100"   // デバイスBのIPアドレス
 ```
+
+ポート番号など認証情報以外の設定は [device_c_m5stack.ino](device_c_m5stack/device_c_m5stack.ino) 側にあります。
 
 > **`raspberrypi.local` について**: mDNS名での指定はESP32側のlwIP設定やネットワーク環境に依存して解決できない場合があります。確実に動かすため **IPアドレスでの指定を推奨**します。
 
@@ -252,28 +264,52 @@ echo $?    # → 1
 
 ---
 
-## 既知の課題
+## 認証情報の取り扱い
 
-### 🔑 WiFi認証情報がソースコードに直書きされている（未対応）
+### ✅ デバイスC: `secrets.h` に分離済み
 
-[device_c_m5stack/device_c_m5stack.ino](device_c_m5stack/device_c_m5stack.ino) では、WiFiのSSIDとパスワードをソースコード冒頭のグローバル変数に直接記述しています。
+WiFiのSSID・パスワードとブローカーのIPアドレスは、スケッチ本体ではなく `secrets.h` に定義しています。`secrets.h` はリポジトリルートの `.gitignore` に登録されているため、実際の値を書いてもコミットされません。
 
-```cpp
-const char* WIFI_SSID     = "your-ssid";
-const char* WIFI_PASSWORD = "your-password";   // ← 実際の値に書き換えて使う
+```
+device_c_m5stack/
+├── device_c_m5stack.ino   # #include "secrets.h" して SECRET_* マクロを参照
+├── secrets.h.example      # テンプレート。コミット対象（実際の値は書かない）
+└── secrets.h              # 各自で作成。.gitignore 済み
 ```
 
-**この構成には、実際の値に書き換えたまま誤ってコミットするとパスワードがリポジトリに残る、というリスクがあります。** Gitの履歴は残り続けるため、後からコミットを取り消してもリモートにpush済みであれば漏洩は取り消せません（履歴の書き換えとパスワードのローテーションが必要になります）。
+スケッチ側は次のように参照するだけで、認証情報そのものは持ちません。
 
-学習用サンプルとしての可読性を優先して現状はこのままとしていますが、**実運用や公開リポジトリでは対処が必要**です。対処方法の例を挙げます。
+```cpp
+#include "secrets.h"
+
+const char* WIFI_SSID        = SECRET_WIFI_SSID;
+const char* WIFI_PASSWORD    = SECRET_WIFI_PASSWORD;
+const char* MQTT_BROKER_HOST = SECRET_MQTT_BROKER_HOST;
+```
+
+これは、**実際の値に書き換えたまま誤ってコミットするとパスワードがリポジトリに残る**という問題への対処です。Gitの履歴は残り続けるため、後からコミットを取り消してもリモートにpush済みであれば漏洩は取り消せません（履歴の書き換えとパスワードのローテーションが必要になります）。
+
+### ⚠️ デバイスA: `BROKER_HOST` はコード内に残っています
+
+[device_a_sender/sender.py](device_a_sender/sender.py) の `BROKER_HOST` は、コミット対象のソース内にあります。ここに書かれているのは**接続先のIPアドレスのみでパスワードは含まない**ため、デバイスCほどの危険はありません。
+
+ただし公開リポジトリでは自宅LANの構成が推測できる情報にはなるので、**この変数は汎用例のまま残し、実際の値はコマンドライン引数か環境変数で渡す**ことを推奨します。
+
+```bash
+python3 sender.py --host 192.168.1.100
+MQTT_BROKER_HOST=192.168.1.100 python3 sender.py
+```
+
+### 今後さらに強化する場合の選択肢
+
+現状の `secrets.h` 方式で学習用途としては十分ですが、より厳密にする場合は以下があります。
 
 | 方法 | 概要 | 向いている場面 |
 |---|---|---|
-| **認証情報を別ヘッダに分離** | `secrets.h` に定義して `#include "secrets.h"` し、`secrets.h` を `.gitignore` に追加。テンプレートとして `secrets.h.example` をコミットしておく | 最も手軽。まずはこれで十分 |
-| **NVS / Preferences に保存** | ESP32のNVS領域に認証情報を保存し、コードからは `Preferences` で読み出す | 認証情報をソースから完全に分離したい場合 |
+| **NVS / Preferences に保存** | ESP32のNVS領域に認証情報を保存し、コードからは `Preferences` で読み出す | 認証情報をソースツリーから完全に分離したい場合 |
 | **WiFiManager 等でプロビジョニング** | 未設定時にM5Stack自身がAPを立て、ブラウザから設定を入力させる | 配布する・複数台に展開する場合 |
 | **ビルド時に注入** | PlatformIOの `build_flags` などでコンパイル時にマクロとして渡す | CI/CDに載せる場合 |
 
 いずれの場合も、**一度でも実際の認証情報をコミットしてしまった場合は、履歴からの除去だけでなくWiFiパスワード自体の変更が必要**です。
 
-なお、同じ問題は本サンプルには存在しないものの、MQTTのユーザー名・パスワードやTLSの秘密鍵を導入する際にもそのまま当てはまります。
+なお、同じ配慮はMQTTのユーザー名・パスワードやTLSの秘密鍵を導入する際にもそのまま当てはまります。
