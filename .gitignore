@@ -72,3 +72,6 @@ Testing/
 # Arduinoスケッチの secrets.h には実際のSSID/パスワードが入るため除外する。
 # テンプレートの secrets.h.example はコミット対象 (この行では除外されない)。
 secrets.h
+
+# venv files
+.venv/
