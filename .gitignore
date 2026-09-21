@@ -67,3 +67,11 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+
+# 認証情報 (コミット禁止)
+# Arduinoスケッチの secrets.h には実際のSSID/パスワードが入るため除外する。
+# テンプレートの secrets.h.example はコミット対象 (この行では除外されない)。
+secrets.h
+
+# venv files
+.venv/

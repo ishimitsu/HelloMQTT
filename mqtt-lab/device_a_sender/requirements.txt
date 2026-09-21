@@ -1,0 +1,3 @@
+# デバイスA: リクエスト送信・応答待受
+# paho-mqtt 2.x 系のコールバックAPI (CallbackAPIVersion.VERSION2) を使用。
+paho-mqtt>=2.1.0,<3.0.0
